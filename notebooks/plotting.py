@@ -1,5 +1,6 @@
 import numpy
 from matplotlib import colors
+import pymc3
 
 
 def transparentify(cmap: colors.Colormap) -> colors.ListedColormap:
@@ -32,3 +33,44 @@ def transparentify(cmap: colors.Colormap) -> colors.ListedColormap:
     cm_new = numpy.array(cmap(numpy.arange(cmap.N)))
     cm_new[:, 3] = numpy.linspace(0, 1, cmap.N)
     return colors.ListedColormap(cm_new)
+
+
+def plot_density(*, ax, x, samples, percentiles=(5, 95), percentile_kwargs=None, **kwargs):
+    assert samples.ndim == 2
+
+    # Step-function mode draws horizontal density bands inbetween the x coordinates
+    step_mode = samples.shape[1] == x.shape[0] - 1
+    fill_kwargs = {}
+    if step_mode:
+        samples = numpy.hstack([
+            samples,
+            samples[:, -1][:, None]
+        ])
+        fill_kwargs["step"] = "post"
+
+    # Plot the density band
+    pymc3.gp.util.plot_gp_dist(
+        ax=ax,
+        x=x,
+        samples=samples,
+        fill_kwargs=fill_kwargs,
+        **kwargs
+    )
+
+    # Add percentiles for orientation
+    pkwargs = dict(
+        linestyle="--",
+        color="black",
+    )
+    pkwargs.update(percentile_kwargs or {})
+    for p in percentiles:
+        values = numpy.percentile(samples, p, axis=0)
+        if step_mode:
+            ax.stairs(values[:-1], x, baseline=None, **pkwargs)
+        else:
+            ax.plot(x, values, **pkwargs)
+        pass
+
+    return
+
+
